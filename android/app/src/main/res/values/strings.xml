@@ -3,4 +3,7 @@
     <string name="instructions">POOLTOOL  |  Swipe toward the target ball to aim and shoot</string>
     <string name="new_rack">New rack</string>
     <string name="camera">Camera</string>
+    <string name="about">About</string>
+    <string name="about_title">About Pooltool</string>
+    <string name="about_message">Pooltool is an interactive 3D pool and billiards simulation game for Android.\n\nDeveloper &amp; Creator:\nAbhinav Kishore</string>
 </resources>

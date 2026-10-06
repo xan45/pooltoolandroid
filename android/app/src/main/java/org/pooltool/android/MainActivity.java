@@ -62,6 +62,14 @@ public final class MainActivity extends Activity {
         cameraParams.leftMargin = 8;
         controls.addView(cameraButton, cameraParams);
 
+        TextView aboutButton = makeButton(R.string.about);
+        aboutButton.setOnClickListener(view -> showAboutDialog());
+        LinearLayout.LayoutParams aboutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        aboutParams.leftMargin = 8;
+        controls.addView(aboutButton, aboutParams);
+
         FrameLayout.LayoutParams controlParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -123,6 +131,14 @@ public final class MainActivity extends Activity {
             surface.onPause();
         }
         super.onPause();
+    }
+
+    private void showAboutDialog() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.about_title)
+                .setMessage(R.string.about_message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     private static final class PoolSurface extends GLSurfaceView {
