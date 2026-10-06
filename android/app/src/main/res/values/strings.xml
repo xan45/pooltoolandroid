@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">Pooltool</string>
-    <string name="instructions">POOLTOOL  |  Swipe toward the target ball to aim and shoot</string>
+    <string name="instructions">Swipe from the cue ball toward your target. Short swipes are gentle; longer swipes add power. In 2-player mode, turns alternate after each shot.</string>
+    <string name="intro_subtitle">Break. Aim. Sink.</string>
+    <string name="continue_to_menu">Get started</string>
+    <string name="main_menu">Choose your game</string>
+    <string name="menu_subtitle">A pocket-sized 3D pool table</string>
+    <string name="practice_mode">Practice</string>
+    <string name="two_player_mode">Two players</string>
+    <string name="how_to_play">How to play</string>
+    <string name="menu">Menu</string>
+    <string name="player_status_initial">Player 1  |  Balls pocketed: 0</string>
+    <string name="player_status">Player %1$d  |  Balls pocketed: %2$d</string>
     <string name="new_rack">New rack</string>
     <string name="camera">Camera</string>
     <string name="about">About</string>

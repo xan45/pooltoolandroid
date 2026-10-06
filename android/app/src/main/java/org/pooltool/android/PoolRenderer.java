@@ -14,6 +14,10 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 final class PoolRenderer implements GLSurfaceView.Renderer {
+    static final int SOUND_SHOT = 1;
+    static final int SOUND_BALL = 2;
+    static final int SOUND_POCKET = 3;
+
     private static final float TABLE_HALF_X = 1.2f;
     private static final float TABLE_HALF_Z = 0.65f;
     private static final float BALL_RADIUS = 0.047f;
@@ -44,6 +48,28 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     private long lastFrameNanos;
     private float accumulator;
     private int pocketedCount;
+    private int currentPlayer = 1;
+    private boolean twoPlayerMode;
+    private boolean shotInProgress;
+    private long lastBallSoundMillis;
+    private volatile SoundListener soundListener;
+    private volatile GameStateListener gameStateListener;
+
+    interface SoundListener {
+        void onSound(int soundType);
+    }
+
+    interface GameStateListener {
+        void onGameStateChanged(int player, int pocketed);
+    }
+
+    void setSoundListener(SoundListener listener) {
+        soundListener = listener;
+    }
+
+    void setGameStateListener(GameStateListener listener) {
+        gameStateListener = listener;
+    }
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
@@ -65,7 +91,7 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         surfaceHeight = Math.max(1, height);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
         float aspect = (float) surfaceWidth / surfaceHeight;
-        Matrix.perspectiveM(projection, 0, 42f, aspect, 0.1f, 25f);
+        Matrix.perspectiveM(projection, 0, 38f, aspect, 0.1f, 25f);
     }
 
     @Override
@@ -97,24 +123,41 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
             return;
         }
 
-        float dx = screenDx / Math.max(1, width);
-        float dz = screenDy / Math.max(1, height);
-        float magnitude = (float) Math.hypot(dx, dz);
-        if (magnitude < 0.0001f) {
+        if (!updateAim(screenDx, screenDy, width, height)) {
             return;
         }
-        aimX = dx / magnitude;
-        aimZ = dz / magnitude;
 
         float power = Math.min(1f, distance / Math.max(1f, Math.min(width, height) * 0.55f));
         float speed = 0.35f + power * MAX_SHOT_SPEED;
         cue.vx = aimX * speed;
         cue.vz = aimZ * speed;
+        shotInProgress = true;
+        emitSound(SOUND_SHOT);
+    }
+
+    synchronized void previewAim(float screenDx, float screenDy, int width, int height) {
+        if (!isMoving()) {
+            updateAim(screenDx, screenDy, width, height);
+        }
+    }
+
+    private boolean updateAim(float screenDx, float screenDy, int width, int height) {
+        float dx = screenDx / Math.max(1, width);
+        float dz = screenDy / Math.max(1, height);
+        float magnitude = (float) Math.hypot(dx, dz);
+        if (magnitude < 0.0001f) {
+            return false;
+        }
+        aimX = dx / magnitude;
+        aimZ = dz / magnitude;
+        return true;
     }
 
     synchronized void resetRack() {
         balls.clear();
         pocketedCount = 0;
+        currentPlayer = 1;
+        shotInProgress = false;
         balls.add(new Ball(0, 0.055f + BALL_RADIUS, 0.37f, 0xFFF6F1E7, true));
 
         int[] colors = {
@@ -134,6 +177,11 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         }
         aimX = 0f;
         aimZ = -1f;
+        notifyGameStateChanged();
+    }
+
+    synchronized void setTwoPlayerMode(boolean enabled) {
+        twoPlayerMode = enabled;
     }
 
     synchronized void toggleCamera() {
@@ -141,8 +189,8 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     }
 
     private void configureCamera() {
-        float eyeY = overheadCamera ? 4.4f : 2.55f;
-        float eyeZ = overheadCamera ? 0.02f : 2.85f;
+        float eyeY = overheadCamera ? 3.6f : 2.2f;
+        float eyeZ = overheadCamera ? 0.02f : 2.4f;
         Matrix.setLookAtM(view, 0, 0f, eyeY, eyeZ, 0f, 0f, 0f, 0f, 1f, 0f);
         Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
     }
@@ -304,6 +352,14 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
                     }
                 }
             }
+
+            if (shotInProgress && !isMoving()) {
+                shotInProgress = false;
+                if (twoPlayerMode) {
+                    currentPlayer = currentPlayer == 1 ? 2 : 1;
+                }
+                notifyGameStateChanged();
+            }
         }
     }
 
@@ -317,12 +373,14 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
                 ball.pocketed = true;
                 ball.vx = 0f;
                 ball.vz = 0f;
-                pocketedCount++;
                 if (ball.cue) {
                     ball.pocketed = false;
                     ball.x = 0f;
                     ball.z = 0.37f;
+                } else {
+                    pocketedCount++;
                 }
+                emitSound(SOUND_POCKET);
                 return;
             }
         }
@@ -371,6 +429,11 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         if (relativeVelocity >= 0f) {
             return;
         }
+        long now = System.currentTimeMillis();
+        if (now - lastBallSoundMillis >= 75L) {
+            lastBallSoundMillis = now;
+            emitSound(SOUND_BALL);
+        }
         float impulse = -(1f + 0.96f) * relativeVelocity * 0.5f;
         first.vx -= impulse * nx;
         first.vz -= impulse * nz;
@@ -394,6 +457,20 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
             }
         }
         return null;
+    }
+
+    private void emitSound(int soundType) {
+        SoundListener listener = soundListener;
+        if (listener != null) {
+            listener.onSound(soundType);
+        }
+    }
+
+    private void notifyGameStateChanged() {
+        GameStateListener listener = gameStateListener;
+        if (listener != null) {
+            listener.onGameStateChanged(currentPlayer, pocketedCount);
+        }
     }
 
     private void createSphere() {
