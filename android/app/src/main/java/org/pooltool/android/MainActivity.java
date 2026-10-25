@@ -27,7 +27,9 @@ import android.widget.TextView;
 
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 public final class MainActivity extends Activity {
     private static final String PREFS_NAME = "openpool_prefs";
@@ -82,23 +84,41 @@ public final class MainActivity extends Activity {
         root.addView(menuScreen);
         root.addView(gameScreen);
 
-        // Apply WindowInsets for Status Bar / Cutout Safe Insets
+        // Apply WindowInsets for Cutout Safe Insets (ignoring transient status bar to prevent jumping HUD)
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-            Insets statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            int topInset = statusBarInsets.top;
-            int leftInset = statusBarInsets.left;
-            int rightInset = statusBarInsets.right;
+            Insets cutoutInsets = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+            int leftInset = cutoutInsets.left;
+            int rightInset = cutoutInsets.right;
 
             if (headerView != null) {
                 FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) headerView.getLayoutParams();
-                params.setMargins(dp(16) + leftInset, topInset + dp(4), dp(16) + rightInset, 0);
+                params.setMargins(dp(16) + leftInset, dp(12), dp(16) + rightInset, 0);
                 headerView.setLayoutParams(params);
             }
             return insets;
         });
 
+        WindowInsetsControllerCompat windowInsetsController =
+                new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+        windowInsetsController.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        );
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
+
         showScreen(introScreen);
         setContentView(root);
+        
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(WindowInsetsCompat.Type.systemBars());
+        }
     }
 
     private View createIntroScreen() {
@@ -495,10 +515,12 @@ public final class MainActivity extends Activity {
     }
 
     private void showCueShopDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
         builder.setTitle(getString(R.string.cue_shop));
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(0xFF06120E); // Explicit dark background
+
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(16), dp(12), dp(16), dp(12));
@@ -585,9 +607,11 @@ public final class MainActivity extends Activity {
     }
 
     private void showAboutDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(0xFF06120E); // Explicit dark background
+
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
         container.setPadding(dp(22), dp(18), dp(22), dp(18));

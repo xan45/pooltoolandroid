@@ -253,10 +253,11 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         cuePullback = 0f;
 
         // Cue ball at head spot
-        balls.add(new Ball(0f, BALL_Y, 0.42f, 0xFFF6F1E7, true));
+        float headSpotZ = 0.325f;
+        balls.add(new Ball(0f, BALL_Y, headSpotZ, 0xFFF6F1E7, true));
 
         // Foot spot position where apex ball rests facing the cue ball
-        float footSpotZ = -0.28f;
+        float footSpotZ = -0.325f;
         float spacing = BALL_RADIUS * 2.02f;
         float rowHeight = spacing * 0.8660254f; // Equilateral triangle height factor sqrt(3)/2
 
