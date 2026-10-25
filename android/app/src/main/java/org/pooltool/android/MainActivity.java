@@ -1,23 +1,38 @@
 package org.pooltool.android;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.RoundRectShape;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 public final class MainActivity extends Activity {
-    private static final int COLOR_BACKGROUND = 0xFF071611;
-    private static final int COLOR_PANEL = 0xE6173025;
-    private static final int COLOR_BUTTON = 0xFF287A53;
+    private static final String PREFS_NAME = "openpool_prefs";
+    private static final String KEY_CUE_INDEX = "selected_cue_index";
+
+    private static final int COLOR_BG_DARK = 0xFF06120E;
+    private static final int COLOR_GLASS_PANEL = 0xF00D221A;
+    private static final int COLOR_ACCENT_GREEN = 0xFF059669;
+    private static final int COLOR_ACCENT_TEAL = 0xFF0284C7;
 
     private PoolSurface surface;
     private PoolRenderer renderer;
@@ -29,13 +44,18 @@ public final class MainActivity extends Activity {
     private TextView turnLabel;
     private float touchX;
     private float touchY;
+    private int activeCueIndex = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        activeCueIndex = prefs.getInt(KEY_CUE_INDEX, 0);
+
         sound = new ToneGenerator(AudioManager.STREAM_MUSIC, 55);
         renderer = new PoolRenderer();
+        renderer.setCueStyle(activeCueIndex);
         renderer.setSoundListener(this::playSound);
         renderer.setGameStateListener((player, pocketed) -> runOnUiThread(() -> {
             if (turnLabel != null) {
@@ -45,6 +65,7 @@ public final class MainActivity extends Activity {
         surface = new PoolSurface(this, renderer);
 
         root = new FrameLayout(this);
+        root.setBackgroundColor(COLOR_BG_DARK);
         root.addView(surface, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -55,68 +76,108 @@ public final class MainActivity extends Activity {
         root.addView(introScreen);
         root.addView(menuScreen);
         root.addView(gameScreen);
+
         showScreen(introScreen);
         setContentView(root);
     }
 
     private View createIntroScreen() {
-        LinearLayout screen = createScreen();
-        TextView title = makeText(R.string.app_name, 42, 0xFFF5E9C8);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout screen = createScreenContainer();
+
+        TextView title = new TextView(this);
+        title.setText(R.string.app_name);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 48);
+        title.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        title.setGravity(Gravity.CENTER);
         screen.addView(title);
 
-        TextView subtitle = makeText(R.string.intro_subtitle, 18, 0xFFD0DCCF);
-        LinearLayout.LayoutParams subtitleParams = centeredParams();
-        subtitleParams.topMargin = dp(8);
-        screen.addView(subtitle, subtitleParams);
+        TextView subtitle = new TextView(this);
+        subtitle.setText(R.string.intro_subtitle);
+        subtitle.setTextColor(0xFF00E6A1);
+        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        subtitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        subtitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subParams.topMargin = dp(8);
+        screen.addView(subtitle, subParams);
 
-        TextView start = makeButton(R.string.continue_to_menu);
-        LinearLayout.LayoutParams buttonParams = centeredParams();
-        buttonParams.topMargin = dp(28);
-        screen.addView(start, buttonParams);
-        start.setOnClickListener(view -> showScreen(menuScreen));
+        View startButton = createMaterial3Button(R.string.continue_to_menu, 0xFF059669, 0xFF047857,
+                () -> showScreen(menuScreen));
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnParams.topMargin = dp(32);
+        screen.addView(startButton, btnParams);
+
         return screen;
     }
 
     private View createMenuScreen() {
-        LinearLayout screen = createScreen();
-        TextView title = makeText(R.string.main_menu, 32, 0xFFF5E9C8);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout screen = createScreenContainer();
+
+        TextView title = new TextView(this);
+        title.setText(R.string.main_menu);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
+        title.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
         screen.addView(title);
 
-        TextView subtitle = makeText(R.string.menu_subtitle, 16, 0xFFD0DCCF);
-        LinearLayout.LayoutParams subtitleParams = centeredParams();
-        subtitleParams.topMargin = dp(6);
-        screen.addView(subtitle, subtitleParams);
-
-        TextView practiceButton = makeButton(R.string.practice_mode);
-        TextView twoPlayerButton = makeButton(R.string.two_player_mode);
-        LinearLayout.LayoutParams buttonParams = centeredParams();
-        buttonParams.topMargin = dp(20);
-        screen.addView(practiceButton, buttonParams);
-        LinearLayout.LayoutParams secondButtonParams = centeredParams();
-        secondButtonParams.topMargin = dp(10);
-        screen.addView(twoPlayerButton, secondButtonParams);
-
-        LinearLayout links = new LinearLayout(this);
-        links.setGravity(Gravity.CENTER);
-        TextView howToPlay = makeButton(R.string.how_to_play);
-        howToPlay.setBackgroundColor(COLOR_PANEL);
-        TextView about = makeButton(R.string.about);
-        about.setBackgroundColor(COLOR_PANEL);
-        links.addView(howToPlay);
-        LinearLayout.LayoutParams aboutParams = new LinearLayout.LayoutParams(
+        TextView subtitle = new TextView(this);
+        subtitle.setText(R.string.menu_subtitle);
+        subtitle.setTextColor(0xFF00E6A1);
+        subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        aboutParams.leftMargin = dp(8);
-        links.addView(about, aboutParams);
-        LinearLayout.LayoutParams linksParams = centeredParams();
-        linksParams.topMargin = dp(16);
-        screen.addView(links, linksParams);
+        subParams.topMargin = dp(4);
+        screen.addView(subtitle, subParams);
 
-        practiceButton.setOnClickListener(view -> startGame(false));
-        twoPlayerButton.setOnClickListener(view -> startGame(true));
-        howToPlay.setOnClickListener(view -> showHowToPlay());
-        about.setOnClickListener(view -> showAboutDialog());
+        // Menu Cards Container
+        LinearLayout cards = new LinearLayout(this);
+        cards.setOrientation(LinearLayout.VERTICAL);
+        cards.setGravity(Gravity.CENTER);
+
+        View practiceCard = createMenuCard(R.string.practice_mode, R.string.practice_desc,
+                0xFF0F3A2E, 0xFF0A2B21, () -> startGame(false));
+        View twoPlayerCard = createMenuCard(R.string.two_player_mode, R.string.two_player_desc,
+                0xFF0284C7, 0xFF0369A1, () -> startGame(true));
+
+        LinearLayout.LayoutParams cardParams1 = new LinearLayout.LayoutParams(dp(320), LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams1.topMargin = dp(24);
+        cards.addView(practiceCard, cardParams1);
+
+        LinearLayout.LayoutParams cardParams2 = new LinearLayout.LayoutParams(dp(320), LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams2.topMargin = dp(12);
+        cards.addView(twoPlayerCard, cardParams2);
+
+        screen.addView(cards);
+
+        // Sub Actions Row
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+
+        View cueShopBtn = createMaterial3SubButton(R.string.cue_shop, this::showCueShopDialog);
+        View howToPlayBtn = createMaterial3SubButton(R.string.how_to_play, this::showHowToPlay);
+        View aboutBtn = createMaterial3SubButton(R.string.about, this::showAboutDialog);
+
+        row.addView(cueShopBtn);
+
+        LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        p1.leftMargin = dp(10);
+        row.addView(howToPlayBtn, p1);
+
+        LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        p2.leftMargin = dp(10);
+        row.addView(aboutBtn, p2);
+
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.topMargin = dp(20);
+        screen.addView(row, rowParams);
+
         return screen;
     }
 
@@ -124,54 +185,223 @@ public final class MainActivity extends Activity {
         FrameLayout screen = new FrameLayout(this);
         screen.setBackgroundColor(Color.TRANSPARENT);
 
+        // Top Floating HUD Header Card
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(12), dp(6), dp(8), dp(6));
-        header.setBackgroundColor(COLOR_PANEL);
-        turnLabel = makeText(R.string.player_status_initial, 15, Color.WHITE);
-        turnLabel.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        header.setPadding(dp(16), dp(10), dp(12), dp(10));
+        header.setElevation(dp(10));
+
+        GradientDrawable headerBg = new GradientDrawable();
+        headerBg.setColor(COLOR_GLASS_PANEL);
+        headerBg.setCornerRadius(dp(20));
+        headerBg.setStroke(dp(1), 0x3000E6A1);
+        header.setBackground(headerBg);
+
+        turnLabel = new TextView(this);
+        turnLabel.setText(R.string.player_status_initial);
+        turnLabel.setTextColor(Color.WHITE);
+        turnLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        turnLabel.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         header.addView(turnLabel, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView menuButton = makeButton(R.string.menu);
-        header.addView(menuButton);
-        menuButton.setOnClickListener(view -> showScreen(menuScreen));
+
+        View cueBtn = createMaterial3Button(R.string.cue_shop, 0xFF14382B, 0xFF0E2B20,
+                this::showCueShopDialog);
+        View menuButton = createMaterial3Button(R.string.menu, 0xFF0F3A2E, 0xFF0A2B21,
+                () -> showScreen(menuScreen));
+
+        header.addView(cueBtn);
+        LinearLayout.LayoutParams menuP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        menuP.leftMargin = dp(8);
+        header.addView(menuButton, menuP);
+
         FrameLayout.LayoutParams headerParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP);
-        headerParams.setMargins(dp(10), dp(10), dp(10), 0);
+        headerParams.setMargins(dp(16), dp(12), dp(16), 0);
         screen.addView(header, headerParams);
 
+        // Bottom Floating Action Controls Bar
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
-        controls.setPadding(dp(6), dp(6), dp(6), dp(6));
-        controls.setBackgroundColor(COLOR_PANEL);
+        controls.setPadding(dp(12), dp(10), dp(12), dp(10));
+        controls.setElevation(dp(10));
 
-        TextView rackButton = makeButton(R.string.new_rack);
-        TextView cameraButton = makeButton(R.string.camera);
-        TextView aboutButton = makeButton(R.string.about);
+        GradientDrawable controlsBg = new GradientDrawable();
+        controlsBg.setColor(COLOR_GLASS_PANEL);
+        controlsBg.setCornerRadius(dp(24));
+        controlsBg.setStroke(dp(1), 0x3000E6A1);
+        controls.setBackground(controlsBg);
+
+        View rackButton = createMaterial3Button(R.string.new_rack, COLOR_ACCENT_GREEN, 0xFF047857,
+                () -> renderer.resetRack());
+        View cameraButton = createMaterial3Button(R.string.camera, COLOR_ACCENT_TEAL, 0xFF0369A1,
+                () -> renderer.toggleCamera());
+        View aboutButton = createMaterial3Button(R.string.about, 0xFF14382B, 0xFF0E2B20,
+                this::showAboutDialog);
+
         controls.addView(rackButton);
-        addSpacedButton(controls, cameraButton);
-        addSpacedButton(controls, aboutButton);
-        rackButton.setOnClickListener(view -> renderer.resetRack());
-        cameraButton.setOnClickListener(view -> renderer.toggleCamera());
-        aboutButton.setOnClickListener(view -> showAboutDialog());
+
+        LinearLayout.LayoutParams camParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        camParams.leftMargin = dp(10);
+        controls.addView(cameraButton, camParams);
+
+        LinearLayout.LayoutParams aboutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        aboutParams.leftMargin = dp(10);
+        controls.addView(aboutButton, aboutParams);
 
         FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        controlsParams.bottomMargin = dp(10);
+        controlsParams.bottomMargin = dp(14);
         screen.addView(controls, controlsParams);
+
         return screen;
     }
 
-    private LinearLayout createScreen() {
+    private View createMaterial3Button(int textRes, int gradientStart, int gradientEnd, Runnable onClick) {
+        TextView button = new TextView(this);
+        button.setText(textRes);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(20), dp(12), dp(20), dp(12));
+        button.setClickable(true);
+        button.setFocusable(true);
+        button.setElevation(dp(6));
+
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {gradientStart, gradientEnd});
+        bg.setCornerRadius(dp(16));
+        bg.setStroke(dp(1), 0x40FFFFFF);
+
+        RippleDrawable ripple = new RippleDrawable(
+                ColorStateList.valueOf(0x40FFFFFF),
+                bg,
+                createCornerMask(dp(16)));
+        button.setBackground(ripple);
+
+        button.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(90)
+                            .setInterpolator(new DecelerateInterpolator()).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(160)
+                            .setInterpolator(new OvershootInterpolator(1.8f)).start();
+                    break;
+            }
+            return false;
+        });
+
+        button.setOnClickListener(v -> onClick.run());
+        return button;
+    }
+
+    private View createMaterial3SubButton(int textRes, Runnable onClick) {
+        TextView button = new TextView(this);
+        button.setText(textRes);
+        button.setTextColor(0xFF00E6A1);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(18), dp(10), dp(18), dp(10));
+        button.setClickable(true);
+        button.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xCC0E261D);
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1), 0x5000E6A1);
+
+        RippleDrawable ripple = new RippleDrawable(
+                ColorStateList.valueOf(0x3000E6A1),
+                bg,
+                createCornerMask(dp(14)));
+        button.setBackground(ripple);
+
+        button.setOnClickListener(v -> onClick.run());
+        return button;
+    }
+
+    private View createMenuCard(int titleRes, int descRes, int gradientStart, int gradientEnd, Runnable onClick) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(22), dp(16), dp(22), dp(16));
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setElevation(dp(8));
+
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[] {gradientStart, gradientEnd});
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(2), 0x5000E6A1);
+
+        RippleDrawable ripple = new RippleDrawable(
+                ColorStateList.valueOf(0x33FFFFFF),
+                bg,
+                createCornerMask(dp(18)));
+        card.setBackground(ripple);
+
+        TextView title = new TextView(this);
+        title.setText(titleRes);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        title.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
+        card.addView(title);
+
+        TextView desc = new TextView(this);
+        desc.setText(descRes);
+        desc.setTextColor(0xFFB0E2D2);
+        desc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        descParams.topMargin = dp(3);
+        card.addView(desc, descParams);
+
+        card.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(90).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(160)
+                            .setInterpolator(new OvershootInterpolator()).start();
+                    break;
+            }
+            return false;
+        });
+
+        card.setOnClickListener(v -> onClick.run());
+        return card;
+    }
+
+    private ShapeDrawable createCornerMask(float radius) {
+        float[] outerRadii = new float[] {
+                radius, radius, radius, radius,
+                radius, radius, radius, radius
+        };
+        return new ShapeDrawable(new RoundRectShape(outerRadii, null, null));
+    }
+
+    private LinearLayout createScreenContainer() {
         LinearLayout screen = new LinearLayout(this);
         screen.setOrientation(LinearLayout.VERTICAL);
         screen.setGravity(Gravity.CENTER);
         screen.setPadding(dp(24), dp(16), dp(24), dp(16));
-        screen.setBackgroundColor(COLOR_BACKGROUND);
+        screen.setBackgroundColor(COLOR_BG_DARK);
         return screen;
     }
 
@@ -183,44 +413,162 @@ public final class MainActivity extends Activity {
     }
 
     private void showScreen(View visibleScreen) {
+        View[] screens = {introScreen, menuScreen, gameScreen};
+        for (View s : screens) {
+            if (s == visibleScreen) {
+                s.setVisibility(View.VISIBLE);
+                s.setAlpha(0f);
+                s.animate().alpha(1.0f).setDuration(220).start();
+            } else {
+                s.setVisibility(View.GONE);
+            }
+        }
         surface.setVisibility(visibleScreen == gameScreen ? View.VISIBLE : View.GONE);
-        introScreen.setVisibility(visibleScreen == introScreen ? View.VISIBLE : View.GONE);
-        menuScreen.setVisibility(visibleScreen == menuScreen ? View.VISIBLE : View.GONE);
-        gameScreen.setVisibility(visibleScreen == gameScreen ? View.VISIBLE : View.GONE);
-    }
-
-    private void addSpacedButton(LinearLayout row, TextView button) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.leftMargin = dp(6);
-        row.addView(button, params);
-    }
-
-    private TextView makeText(int text, int size, int color) {
-        TextView label = new TextView(this);
-        label.setText(text);
-        label.setTextColor(color);
-        label.setTextSize(size);
-        label.setGravity(Gravity.CENTER);
-        return label;
-    }
-
-    private TextView makeButton(int label) {
-        TextView button = makeText(label, 15, Color.WHITE);
-        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        button.setPadding(dp(18), dp(12), dp(18), dp(12));
-        button.setBackgroundColor(COLOR_BUTTON);
-        button.setClickable(true);
-        return button;
-    }
-
-    private LinearLayout.LayoutParams centeredParams() {
-        return new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void showCueShopDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(getString(R.string.cue_shop));
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(16), dp(12), dp(16), dp(12));
+
+        for (int i = 0; i < PoolRenderer.CUE_NAMES.length; i++) {
+            final int index = i;
+            LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.HORIZONTAL);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(14), dp(12), dp(14), dp(12));
+
+            GradientDrawable itemBg = new GradientDrawable();
+            itemBg.setColor(index == activeCueIndex ? 0xFF0F3A2E : 0xFF141F1B);
+            itemBg.setCornerRadius(dp(12));
+            itemBg.setStroke(dp(1), index == activeCueIndex ? 0xFF00E6A1 : 0x30FFFFFF);
+            item.setBackground(itemBg);
+
+            // Cue Color Preview Indicator Box
+            View colorBox = new View(this);
+            GradientDrawable boxBg = new GradientDrawable();
+            boxBg.setColor(PoolRenderer.CUE_COLORS[i]);
+            boxBg.setCornerRadius(dp(6));
+            colorBox.setBackground(boxBg);
+            LinearLayout.LayoutParams boxP = new LinearLayout.LayoutParams(dp(28), dp(28));
+            item.addView(colorBox, boxP);
+
+            LinearLayout textCol = new LinearLayout(this);
+            textCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams textP = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            textP.leftMargin = dp(12);
+
+            TextView name = new TextView(this);
+            name.setText(PoolRenderer.CUE_NAMES[i]);
+            name.setTextColor(Color.WHITE);
+            name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            name.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
+            textCol.addView(name);
+
+            TextView desc = new TextView(this);
+            desc.setText(PoolRenderer.CUE_DESCRIPTIONS[i]);
+            desc.setTextColor(0xFFB0E2D2);
+            desc.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            textCol.addView(desc);
+
+            item.addView(textCol, textP);
+
+            TextView equipBtn = new TextView(this);
+            equipBtn.setText(index == activeCueIndex ? R.string.equipped : R.string.equip);
+            equipBtn.setTextColor(index == activeCueIndex ? 0xFF00E6A1 : Color.WHITE);
+            equipBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            equipBtn.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
+            equipBtn.setPadding(dp(10), dp(6), dp(10), dp(6));
+
+            item.addView(equipBtn);
+
+            item.setOnClickListener(v -> {
+                activeCueIndex = index;
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putInt(KEY_CUE_INDEX, activeCueIndex)
+                        .apply();
+                renderer.setCueStyle(activeCueIndex);
+                showCueShopDialog();
+            });
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = dp(8);
+            list.addView(item, lp);
+        }
+
+        scroll.addView(list);
+        builder.setView(scroll);
+        builder.setPositiveButton(android.R.string.ok, null);
+        builder.show();
+    }
+
+    private void showHowToPlay() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.how_to_play)
+                .setMessage(R.string.instructions)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    private void showAboutDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(dp(20), dp(16), dp(20), dp(16));
+
+        TextView title = new TextView(this);
+        title.setText(R.string.about_title);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        title.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
+        container.addView(title);
+
+        TextView verBadge = new TextView(this);
+        verBadge.setText(String.format("Version %s (Build %d) • Pre-Release", org.pooltool.android.BuildConfig.VERSION_NAME, org.pooltool.android.BuildConfig.VERSION_CODE));
+        verBadge.setTextColor(0xFF00E6A1);
+        verBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        verBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        LinearLayout.LayoutParams badgeP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        badgeP.topMargin = dp(4);
+        container.addView(verBadge, badgeP);
+
+        TextView devInfo = new TextView(this);
+        devInfo.setText("Developer & Creator:\nAbhinav Kishore (XanDron45)\n\n" +
+                "Open Pool is an experimental 3D billiards simulation built natively for Android.\n\n" +
+                "Developed using:\n" +
+                "• Android Studio\n" +
+                "• Google AI Studio\n" +
+                "• Gemini-assisted software engineering\n\n" +
+                "Key Features:\n" +
+                "• High-performance OpenGL ES 2.0 rendering engine\n" +
+                "• Custom 3D cue stick selection & physics simulation\n" +
+                "• Material 3 UI design & touch-precision controls\n" +
+                "• Automated GitHub CI/CD build & release pipeline\n\n" +
+                "Status: Experimental Pre-Release");
+        devInfo.setTextColor(0xFFD0E6DC);
+        devInfo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        LinearLayout.LayoutParams devP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        devP.topMargin = dp(16);
+        container.addView(devInfo, devP);
+
+        scroll.addView(container);
+        builder.setView(scroll);
+        builder.setPositiveButton(android.R.string.ok, null);
+        builder.show();
     }
 
     private void playSound(int soundType) {
@@ -294,22 +642,6 @@ public final class MainActivity extends Activity {
             sound = null;
         }
         super.onDestroy();
-    }
-
-    private void showHowToPlay() {
-        new android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.how_to_play)
-                .setMessage(R.string.instructions)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
-    }
-
-    private void showAboutDialog() {
-        new android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.about_title)
-                .setMessage(R.string.about_message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
     }
 
     private static final class PoolSurface extends GLSurfaceView {
