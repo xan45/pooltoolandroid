@@ -28,10 +28,11 @@ jobs:
       - name: Extract Tag & Version
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG_NAME="${github.ref#refs/tags/}"
-          else
+          REF_NAME="${{ github.ref_name }}"
+          if [[ -z "$REF_NAME" || "$REF_NAME" == "main" ]]; then
             TAG_NAME="v0.3.0-beta"
+          else
+            TAG_NAME="$REF_NAME"
           fi
           VERSION_NAME="${TAG_NAME#v}"
           COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -86,7 +87,6 @@ jobs:
           EOF
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
