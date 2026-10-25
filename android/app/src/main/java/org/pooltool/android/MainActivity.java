@@ -25,6 +25,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
 public final class MainActivity extends Activity {
     private static final String PREFS_NAME = "openpool_prefs";
     private static final String KEY_CUE_INDEX = "selected_cue_index";
@@ -41,6 +45,7 @@ public final class MainActivity extends Activity {
     private View introScreen;
     private View menuScreen;
     private View gameScreen;
+    private View headerView;
     private TextView turnLabel;
     private float touchX;
     private float touchY;
@@ -76,6 +81,21 @@ public final class MainActivity extends Activity {
         root.addView(introScreen);
         root.addView(menuScreen);
         root.addView(gameScreen);
+
+        // Apply WindowInsets for Status Bar / Cutout Safe Insets
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            int topInset = statusBarInsets.top;
+            int leftInset = statusBarInsets.left;
+            int rightInset = statusBarInsets.right;
+
+            if (headerView != null) {
+                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) headerView.getLayoutParams();
+                params.setMargins(dp(16) + leftInset, topInset + dp(4), dp(16) + rightInset, 0);
+                headerView.setLayoutParams(params);
+            }
+            return insets;
+        });
 
         showScreen(introScreen);
         setContentView(root);
@@ -185,80 +205,81 @@ public final class MainActivity extends Activity {
         FrameLayout screen = new FrameLayout(this);
         screen.setBackgroundColor(Color.TRANSPARENT);
 
-        // Top Floating HUD Header Card
+        // Compact Floating Top HUD Card
         LinearLayout header = new LinearLayout(this);
+        headerView = header;
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(16), dp(10), dp(12), dp(10));
-        header.setElevation(dp(10));
+        header.setPadding(dp(12), dp(5), dp(10), dp(5)); // Reduced height by 35%
+        header.setElevation(dp(8));
 
         GradientDrawable headerBg = new GradientDrawable();
         headerBg.setColor(COLOR_GLASS_PANEL);
-        headerBg.setCornerRadius(dp(20));
+        headerBg.setCornerRadius(dp(18));
         headerBg.setStroke(dp(1), 0x3000E6A1);
         header.setBackground(headerBg);
 
         turnLabel = new TextView(this);
         turnLabel.setText(R.string.player_status_initial);
         turnLabel.setTextColor(Color.WHITE);
-        turnLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        turnLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         turnLabel.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         header.addView(turnLabel, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        View cueBtn = createMaterial3Button(R.string.cue_shop, 0xFF14382B, 0xFF0E2B20,
+        View cueBtn = createCompactMaterial3Button(R.string.cue_shop, 0xFF14382B, 0xFF0E2B20,
                 this::showCueShopDialog);
-        View menuButton = createMaterial3Button(R.string.menu, 0xFF0F3A2E, 0xFF0A2B21,
+        View menuButton = createCompactMaterial3Button(R.string.menu, 0xFF0F3A2E, 0xFF0A2B21,
                 () -> showScreen(menuScreen));
 
         header.addView(cueBtn);
         LinearLayout.LayoutParams menuP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        menuP.leftMargin = dp(8);
+        menuP.leftMargin = dp(6);
         header.addView(menuButton, menuP);
 
         FrameLayout.LayoutParams headerParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP);
-        headerParams.setMargins(dp(16), dp(12), dp(16), 0);
+        headerParams.setMargins(dp(16), dp(6), dp(16), 0);
         screen.addView(header, headerParams);
 
         // Bottom Floating Action Controls Bar
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
-        controls.setPadding(dp(12), dp(10), dp(12), dp(10));
-        controls.setElevation(dp(10));
+        controls.setPadding(dp(10), dp(6), dp(10), dp(6));
+        controls.setElevation(dp(8));
 
         GradientDrawable controlsBg = new GradientDrawable();
         controlsBg.setColor(COLOR_GLASS_PANEL);
-        controlsBg.setCornerRadius(dp(24));
+        controlsBg.setCornerRadius(dp(22));
         controlsBg.setStroke(dp(1), 0x3000E6A1);
         controls.setBackground(controlsBg);
 
-        View rackButton = createMaterial3Button(R.string.new_rack, COLOR_ACCENT_GREEN, 0xFF047857,
+        View rackButton = createCompactMaterial3Button(R.string.new_rack, COLOR_ACCENT_GREEN, 0xFF047857,
                 () -> renderer.resetRack());
-        View cameraButton = createMaterial3Button(R.string.camera, COLOR_ACCENT_TEAL, 0xFF0369A1,
+        View cameraButton = createCompactMaterial3Button(R.string.camera, COLOR_ACCENT_TEAL, 0xFF0369A1,
                 () -> renderer.toggleCamera());
-        View aboutButton = createMaterial3Button(R.string.about, 0xFF14382B, 0xFF0E2B20,
+        View aboutButton = createCompactMaterial3Button(R.string.about, 0xFF14382B, 0xFF0E2B20,
                 this::showAboutDialog);
 
         controls.addView(rackButton);
 
         LinearLayout.LayoutParams camParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        camParams.leftMargin = dp(10);
+        camParams.leftMargin = dp(8);
         controls.addView(cameraButton, camParams);
 
         LinearLayout.LayoutParams aboutParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        aboutParams.leftMargin = dp(10);
+        aboutParams.leftMargin = dp(8);
         controls.addView(aboutButton, aboutParams);
 
         FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        controlsParams.bottomMargin = dp(14);
+        controlsParams.bottomMargin = dp(10);
         screen.addView(controls, controlsParams);
 
         return screen;
@@ -286,6 +307,49 @@ public final class MainActivity extends Activity {
                 ColorStateList.valueOf(0x40FFFFFF),
                 bg,
                 createCornerMask(dp(16)));
+        button.setBackground(ripple);
+
+        button.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(90)
+                            .setInterpolator(new DecelerateInterpolator()).start();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(160)
+                            .setInterpolator(new OvershootInterpolator(1.8f)).start();
+                    break;
+            }
+            return false;
+        });
+
+        button.setOnClickListener(v -> onClick.run());
+        return button;
+    }
+
+    private View createCompactMaterial3Button(int textRes, int gradientStart, int gradientEnd, Runnable onClick) {
+        TextView button = new TextView(this);
+        button.setText(textRes);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(14), dp(8), dp(14), dp(8));
+        button.setClickable(true);
+        button.setFocusable(true);
+        button.setElevation(dp(4));
+
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {gradientStart, gradientEnd});
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), 0x40FFFFFF);
+
+        RippleDrawable ripple = new RippleDrawable(
+                ColorStateList.valueOf(0x40FFFFFF),
+                bg,
+                createCornerMask(dp(12)));
         button.setBackground(ripple);
 
         button.setOnTouchListener((v, event) -> {

@@ -163,7 +163,7 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         surfaceHeight = Math.max(1, height);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
         float aspect = (float) surfaceWidth / surfaceHeight;
-        float fov = aspect < 1.0f ? 44f : 36f;
+        float fov = aspect < 1.0f ? 50f : 38f;
         Matrix.perspectiveM(projection, 0, fov, aspect, 0.1f, 25f);
     }
 
@@ -252,22 +252,52 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         shotInProgress = false;
         cuePullback = 0f;
 
-        balls.add(new Ball(0, BALL_Y, 0.42f, 0xFFF6F1E7, true));
+        // Cue ball at head spot
+        balls.add(new Ball(0f, BALL_Y, 0.42f, 0xFFF6F1E7, true));
 
-        int[] colors = {
-                0xFFF4D03F, 0xFF3585D5, 0xFFD74343, 0xFF8746B5, 0xFFF18B35,
-                0xFF2A9C60, 0xFF8B3232, 0xFF2B2B32, 0xFFF4D03F, 0xFF3585D5,
-                0xFFD74343, 0xFF8746B5, 0xFFF18B35, 0xFF2A9C60, 0xFF8B3232
+        // Foot spot position where apex ball rests facing the cue ball
+        float footSpotZ = -0.28f;
+        float spacing = BALL_RADIUS * 2.02f;
+        float rowHeight = spacing * 0.8660254f; // Equilateral triangle height factor sqrt(3)/2
+
+        // Regulation 15-ball color palette
+        int colorSolid1 = 0xFFF4D03F; // 1 Yellow
+        int colorSolid2 = 0xFF3585D5; // 2 Blue
+        int colorSolid3 = 0xFFD74343; // 3 Red
+        int colorSolid4 = 0xFF8746B5; // 4 Purple
+        int colorSolid5 = 0xFFF18B35; // 5 Orange
+        int colorSolid6 = 0xFF2A9C60; // 6 Green
+        int colorSolid7 = 0xFF8B3232; // 7 Maroon
+        int colorEight = 0xFF2B2B32;  // 8 Black
+        int colorStripe9 = 0xFFF4D03F; // 9 Yellow Stripe
+        int colorStripe10 = 0xFF3585D5; // 10 Blue Stripe
+        int colorStripe11 = 0xFFD74343; // 11 Red Stripe
+        int colorStripe12 = 0xFF8746B5; // 12 Purple Stripe
+        int colorStripe13 = 0xFFF18B35; // 13 Orange Stripe
+        int colorStripe14 = 0xFF2A9C60; // 14 Green Stripe
+        int colorStripe15 = 0xFF8B3232; // 15 Maroon Stripe
+
+        // Array mapped row by row (0 to 4):
+        // Row 0: Apex ball (Solid 1)
+        // Row 1: 2 balls
+        // Row 2: 3 balls (Center ball [Row 2, Col 1] MUST be 8-ball!)
+        // Row 3: 4 balls
+        // Row 4: 5 balls (Corners: 1 solid, 1 stripe)
+        int[] rackColors = {
+                colorSolid1,                                                     // Row 0
+                colorStripe9, colorSolid2,                                       // Row 1
+                colorSolid3, colorEight, colorStripe10,                          // Row 2 (8-ball center!)
+                colorStripe11, colorSolid4, colorStripe12, colorSolid5,          // Row 3
+                colorSolid6, colorStripe13, colorSolid7, colorStripe14, colorStripe15 // Row 4 (Corner mix)
         };
 
         int ballIndex = 0;
-        float rackZ = -0.22f;
-        float spacing = BALL_RADIUS * 2.06f;
         for (int row = 0; row < 5; row++) {
             for (int col = 0; col <= row; col++) {
                 float x = (col - row * 0.5f) * spacing;
-                float z = rackZ - row * spacing * 0.88f;
-                balls.add(new Ball(x, BALL_Y, z, colors[ballIndex++], false));
+                // Apex ball is at footSpotZ; subsequent rows extend BACKWARD toward top rail (-Z)
+                float z = footSpotZ - row * rowHeight;
+                balls.add(new Ball(x, BALL_Y, z, rackColors[ballIndex++], false));
             }
         }
 
@@ -287,8 +317,8 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     }
 
     private void configureCamera() {
-        float eyeY = overheadCamera ? 3.4f : 2.1f;
-        float eyeZ = overheadCamera ? 0.01f : 2.1f;
+        float eyeY = overheadCamera ? 3.1f : 1.85f;
+        float eyeZ = overheadCamera ? 0.01f : 1.85f;
         Matrix.setLookAtM(view, 0, 0f, eyeY, eyeZ, 0f, 0f, -0.05f, 0f, 1f, 0f);
         Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
     }
