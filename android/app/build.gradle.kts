@@ -4,6 +4,7 @@ plugins {
 
 val appVersionName: String = System.getenv("VERSION_NAME")?.removePrefix("v") ?: "0.3.0-beta"
 val appVersionCode: Int = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 30
+val gitCommitHash: String = System.getenv("GIT_COMMIT_HASH") ?: "b3b976b"
 
 android {
     namespace = "org.pooltool.android"
@@ -15,6 +16,8 @@ android {
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
+
+        buildConfigField("String", "GIT_COMMIT_HASH", "\"$gitCommitHash\"")
     }
 
     buildFeatures {

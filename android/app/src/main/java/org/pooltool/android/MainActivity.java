@@ -526,43 +526,45 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(dp(20), dp(16), dp(20), dp(16));
+        container.setPadding(dp(22), dp(18), dp(22), dp(18));
 
         TextView title = new TextView(this);
-        title.setText(R.string.about_title);
+        title.setText("Open Pool Android Port");
         title.setTextColor(Color.WHITE);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
         title.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
         container.addView(title);
 
         TextView verBadge = new TextView(this);
-        verBadge.setText(String.format("Version %s (Build %d) • Pre-Release", org.pooltool.android.BuildConfig.VERSION_NAME, org.pooltool.android.BuildConfig.VERSION_CODE));
+        verBadge.setText(String.format("Version Name: %s\nVersion Code: %d\nGit Commit: %s\nRelease Channel: Experimental Pre-Release",
+                org.pooltool.android.BuildConfig.VERSION_NAME,
+                org.pooltool.android.BuildConfig.VERSION_CODE,
+                org.pooltool.android.BuildConfig.GIT_COMMIT_HASH));
         verBadge.setTextColor(0xFF00E6A1);
         verBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         verBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         LinearLayout.LayoutParams badgeP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        badgeP.topMargin = dp(4);
+        badgeP.topMargin = dp(6);
         container.addView(verBadge, badgeP);
 
         TextView devInfo = new TextView(this);
-        devInfo.setText("Developer & Creator:\nAbhinav Kishore (XanDron45)\n\n" +
-                "Open Pool is an experimental 3D billiards simulation built natively for Android.\n\n" +
-                "Developed using:\n" +
-                "• Android Studio\n" +
-                "• Google AI Studio\n" +
-                "• Gemini-assisted software engineering\n\n" +
-                "Key Features:\n" +
-                "• High-performance OpenGL ES 2.0 rendering engine\n" +
-                "• Custom 3D cue stick selection & physics simulation\n" +
-                "• Material 3 UI design & touch-precision controls\n" +
-                "• Automated GitHub CI/CD build & release pipeline\n\n" +
-                "Status: Experimental Pre-Release");
+        devInfo.setText("Developer:\nAbhinav Kishore (XanDron45)\n\n" +
+                "About This Project:\n" +
+                "Open Pool Android Port\n\n" +
+                "This project is an experimental Android port of an open-source pool game developed using Android Studio and Google AI Studio (Gemini).\n\n" +
+                "Features:\n" +
+                "• Physics-based gameplay\n" +
+                "• Modern Material UI\n" +
+                "• Cue customization\n" +
+                "• GitHub automated releases\n" +
+                "• Android optimization\n\n" +
+                "Status:\nExperimental Pre-Release");
         devInfo.setTextColor(0xFFD0E6DC);
         devInfo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         LinearLayout.LayoutParams devP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        devP.topMargin = dp(16);
+        devP.topMargin = dp(14);
         container.addView(devInfo, devP);
 
         scroll.addView(container);
