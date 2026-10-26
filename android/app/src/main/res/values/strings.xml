@@ -20,4 +20,9 @@
     <string name="about_title">Open Pool Android Port</string>
     <string name="equipped">EQUIPPED</string>
     <string name="equip">EQUIP</string>
+    <string name="spin">Spin</string>
+    <string name="spin_title">Cue Ball Spin &amp; English</string>
+    <string name="spin_hint">Drag on the cue ball to set tip impact point</string>
+    <string name="spin_center">Center (Stun)</string>
+    <string name="spin_reset">Reset Center</string>
 </resources>

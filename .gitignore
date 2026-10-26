@@ -159,3 +159,15 @@ errors.txt
 
 **/.claude/settings.local.json
 .claude/worktrees/
+
+# Android & Gradle
+.gradle/
+build/
+android/app/build/
+android/build/
+local.properties
+android/local.properties
+*.apk
+*.aab
+.cxx/
+

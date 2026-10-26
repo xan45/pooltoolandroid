@@ -14,6 +14,9 @@ An experimental, high-performance native 3D pool and billiards simulation game f
 ## 🌟 Key Features
 
 * **Physics-Based Gameplay**: Fixed-step 120 Hz deterministic physics engine supporting realistic ball-to-ball collisions, cushion rebounds, friction deceleration, and pocket drop detection.
+* **Advanced Spin & English Physics**: Full cue tip striking offset controls to execute Follow (top spin), Draw (backspin), and Left/Right English with squirt deflection and rail rebound angle shifts.
+* **Authentic Audio Experience**: High-fidelity billiard sound effects (`.ogg`) powered by Android's native `SoundPool` with dynamic velocity volume scaling and pitch variations.
+* **Realistic Cushion Jaws & Pocket Ingress**: Tapered cushion jaw facings, realistic entrance angles, and jaw rejections instead of artificial radial distance checks.
 * **Modern Material 3 UI**: Glassmorphic dark theme, elevated cards, interactive rounded buttons, press-scale animations, and native ripple touch feedback.
 * **Touch Aiming & Power Control**: Precise finger aiming with 50% sensitivity reduction, Exponential Moving Average (EMA) angle smoothing, raycast collision preview, and dynamic cue stick pullback shot power scaling.
 * **3D Cue Customization**: Equip 5 distinct custom 3D cue stick models (*Classic Wood, Ebony, Carbon Fiber, Gold Edition, Neon Blue*) with persistent storage.
@@ -118,9 +121,10 @@ The compiled APK will be generated at:
 - [x] Dynamic Cue Customization System (5 Cue Styles)
 - [x] Raycast Impact Crosshair Indicator
 - [x] Automated GitHub Actions APK Build & Release Workflow
-- [ ] Spin & English Ball Strike Offset
+- [x] Spin & English Ball Strike Offset (Follow, Draw, Side English, Squirt)
+- [x] High-Fidelity Audio Engine (SoundPool with cue_shot, ball_hit, cushion, and pocket .ogg effects)
+- [x] Realistic Cushion Jaws & Angle-based Pocket Acceptance
 - [ ] Online Multiplayer & Leaderboards
-- [ ] Sound Effects Expansion
 
 ---
 

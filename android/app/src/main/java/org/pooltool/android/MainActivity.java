@@ -2,16 +2,19 @@ package org.pooltool.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.RoundRectShape;
-import android.media.AudioManager;
-import android.media.ToneGenerator;
+import android.media.AudioAttributes;
+import android.media.SoundPool;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.util.TypedValue;
@@ -42,7 +45,11 @@ public final class MainActivity extends Activity {
 
     private PoolSurface surface;
     private PoolRenderer renderer;
-    private ToneGenerator sound;
+    private SoundPool soundPool;
+    private int soundShotId;
+    private int soundBallId;
+    private int soundPocketId;
+    private int soundCushionId;
     private FrameLayout root;
     private View introScreen;
     private View menuScreen;
@@ -60,7 +67,19 @@ public final class MainActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         activeCueIndex = prefs.getInt(KEY_CUE_INDEX, 0);
 
-        sound = new ToneGenerator(AudioManager.STREAM_MUSIC, 55);
+        AudioAttributes audioAttrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        soundPool = new SoundPool.Builder()
+                .setMaxStreams(8)
+                .setAudioAttributes(audioAttrs)
+                .build();
+        soundShotId = soundPool.load(this, R.raw.cue_shot, 1);
+        soundBallId = soundPool.load(this, R.raw.ball_hit, 1);
+        soundPocketId = soundPool.load(this, R.raw.pocket, 1);
+        soundCushionId = soundPool.load(this, R.raw.cushion, 1);
+
         renderer = new PoolRenderer();
         renderer.setCueStyle(activeCueIndex);
         renderer.setSoundListener(this::playSound);
@@ -281,6 +300,8 @@ public final class MainActivity extends Activity {
                 () -> renderer.resetRack());
         View cameraButton = createCompactMaterial3Button(R.string.camera, COLOR_ACCENT_TEAL, 0xFF0369A1,
                 () -> renderer.toggleCamera());
+        View spinButton = createCompactMaterial3Button(R.string.spin, 0xFF8746B5, 0xFF6B21A8,
+                this::showSpinDialog);
         View aboutButton = createCompactMaterial3Button(R.string.about, 0xFF14382B, 0xFF0E2B20,
                 this::showAboutDialog);
 
@@ -290,6 +311,11 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         camParams.leftMargin = dp(8);
         controls.addView(cameraButton, camParams);
+
+        LinearLayout.LayoutParams spinParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        spinParams.leftMargin = dp(8);
+        controls.addView(spinButton, spinParams);
 
         LinearLayout.LayoutParams aboutParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -606,6 +632,85 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
+    private void showSpinDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        builder.setTitle(getString(R.string.spin_title));
+
+        LinearLayout rootLayout = new LinearLayout(this);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+        rootLayout.setPadding(dp(20), dp(16), dp(20), dp(16));
+        rootLayout.setBackgroundColor(0xFF06120E);
+
+        TextView hintLabel = new TextView(this);
+        hintLabel.setText(R.string.spin_hint);
+        hintLabel.setTextColor(0xFF80A699);
+        hintLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        hintLabel.setGravity(Gravity.CENTER);
+        rootLayout.addView(hintLabel);
+
+        final TextView statusLabel = new TextView(this);
+        statusLabel.setTextColor(0xFF00E6A1);
+        statusLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        statusLabel.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        statusLabel.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = dp(8);
+        statusParams.bottomMargin = dp(12);
+        rootLayout.addView(statusLabel, statusParams);
+
+        updateSpinStatusLabel(statusLabel, renderer.getTipOffsetX(), renderer.getTipOffsetY());
+
+        final SpinSelectorView selector = new SpinSelectorView(this,
+                renderer.getTipOffsetX(), renderer.getTipOffsetY(), (offX, offY) -> {
+            renderer.setTipOffset(offX, offY);
+            updateSpinStatusLabel(statusLabel, offX, offY);
+        });
+        rootLayout.addView(selector);
+
+        // Quick Preset Buttons Row
+        LinearLayout presets = new LinearLayout(this);
+        presets.setOrientation(LinearLayout.HORIZONTAL);
+        presets.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams presetRowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        presetRowParams.topMargin = dp(16);
+
+        View btnCenter = createCompactMaterial3Button(R.string.spin_reset, 0xFF14382B, 0xFF0E2B20, () -> {
+            selector.setSpin(0f, 0f);
+            renderer.setTipOffset(0f, 0f);
+            updateSpinStatusLabel(statusLabel, 0f, 0f);
+        });
+
+        presets.addView(btnCenter);
+        rootLayout.addView(presets, presetRowParams);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(rootLayout);
+        builder.setView(scroll);
+        builder.setPositiveButton(android.R.string.ok, null);
+        builder.show();
+    }
+
+    private void updateSpinStatusLabel(TextView label, float offX, float offY) {
+        if (Math.hypot(offX, offY) < 0.08f) {
+            label.setText(R.string.spin_center);
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (Math.abs(offY) >= 0.08f) {
+            int pct = Math.round(Math.abs(offY) * 100);
+            sb.append(offY > 0 ? "Follow (Top): " : "Draw (Back): ").append(pct).append("%");
+        }
+        if (Math.abs(offX) >= 0.08f) {
+            if (sb.length() > 0) sb.append("  |  ");
+            int pct = Math.round(Math.abs(offX) * 100);
+            sb.append(offX > 0 ? "Right: " : "Left: ").append(pct).append("%");
+        }
+        label.setText(sb.toString());
+    }
+
     private void showAboutDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
 
@@ -661,25 +766,28 @@ public final class MainActivity extends Activity {
         builder.show();
     }
 
-    private void playSound(int soundType) {
-        runOnUiThread(() -> {
-            if (sound == null) {
-                return;
-            }
-            switch (soundType) {
-                case PoolRenderer.SOUND_SHOT:
-                    sound.startTone(ToneGenerator.TONE_PROP_BEEP2, 90);
-                    break;
-                case PoolRenderer.SOUND_BALL:
-                    sound.startTone(ToneGenerator.TONE_PROP_ACK, 45);
-                    break;
-                case PoolRenderer.SOUND_POCKET:
-                    sound.startTone(ToneGenerator.TONE_PROP_NACK, 110);
-                    break;
-                default:
-                    break;
-            }
-        });
+    private void playSound(int soundType, float volume) {
+        if (soundPool == null) {
+            return;
+        }
+        float vol = Math.max(0.12f, Math.min(1.0f, volume));
+        switch (soundType) {
+            case PoolRenderer.SOUND_SHOT:
+                soundPool.play(soundShotId, vol, vol, 1, 0, 1.0f);
+                break;
+            case PoolRenderer.SOUND_BALL:
+                float pitch = 0.94f + (float) Math.random() * 0.12f;
+                soundPool.play(soundBallId, vol, vol, 1, 0, pitch);
+                break;
+            case PoolRenderer.SOUND_POCKET:
+                soundPool.play(soundPocketId, 1.0f, 1.0f, 2, 0, 1.0f);
+                break;
+            case PoolRenderer.SOUND_CUSHION:
+                soundPool.play(soundCushionId, vol * 0.85f, vol * 0.85f, 1, 0, 1.0f);
+                break;
+            default:
+                break;
+        }
     }
 
     private boolean handleTouch(View view, MotionEvent event) {
@@ -727,11 +835,124 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        if (sound != null) {
-            sound.release();
-            sound = null;
+        if (soundPool != null) {
+            soundPool.release();
+            soundPool = null;
         }
         super.onDestroy();
+    }
+
+    private static final class SpinSelectorView extends View {
+        private final Paint ballPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint dotInnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        private float offsetX;
+        private float offsetY;
+        private final SpinChangeListener listener;
+
+        interface SpinChangeListener {
+            void onSpinChanged(float offX, float offY);
+        }
+
+        SpinSelectorView(Context context, float initialX, float initialY, SpinChangeListener listener) {
+            super(context);
+            this.offsetX = initialX;
+            this.offsetY = initialY;
+            this.listener = listener;
+
+            ballPaint.setColor(0xFFF6F3EB);
+            ballPaint.setStyle(Paint.Style.FILL);
+
+            shadowPaint.setColor(0x40000000);
+            shadowPaint.setStyle(Paint.Style.FILL);
+
+            linePaint.setColor(0x30000000);
+            linePaint.setStrokeWidth(2.5f);
+            linePaint.setStyle(Paint.Style.STROKE);
+
+            dotPaint.setColor(0xFFE53935); // Chalk Red strike dot
+            dotPaint.setStyle(Paint.Style.FILL);
+
+            dotInnerPaint.setColor(0xFFFFFFFF);
+            dotInnerPaint.setStyle(Paint.Style.FILL);
+
+            textPaint.setColor(0xFF80A699);
+            textPaint.setTextSize(26f);
+            textPaint.setTextAlign(Paint.Align.CENTER);
+            textPaint.setTypeface(Typeface.create("sans-serif-bold", Typeface.BOLD));
+        }
+
+        void setSpin(float offX, float offY) {
+            this.offsetX = offX;
+            this.offsetY = offY;
+            invalidate();
+            if (listener != null) {
+                listener.onSpinChanged(offsetX, offsetY);
+            }
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            int size = (int) (180 * getResources().getDisplayMetrics().density);
+            setMeasuredDimension(size, size);
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float cx = getWidth() * 0.5f;
+            float cy = getHeight() * 0.5f;
+            float radius = Math.min(cx, cy) * 0.74f;
+
+            canvas.drawCircle(cx, cy + radius * 0.08f, radius, shadowPaint);
+            canvas.drawCircle(cx, cy, radius, ballPaint);
+
+            canvas.drawLine(cx - radius * 0.85f, cy, cx + radius * 0.85f, cy, linePaint);
+            canvas.drawLine(cx, cy - radius * 0.85f, cx, cy + radius * 0.85f, linePaint);
+
+            canvas.drawText("FOLLOW", cx, cy - radius - 10f, textPaint);
+            canvas.drawText("DRAW", cx, cy + radius + 30f, textPaint);
+            canvas.drawText("L", cx - radius - 18f, cy + 9f, textPaint);
+            canvas.drawText("R", cx + radius + 18f, cy + 9f, textPaint);
+
+            float dotX = cx + offsetX * radius;
+            float dotY = cy - offsetY * radius; // Invert Y
+            canvas.drawCircle(dotX, dotY, radius * 0.16f, dotPaint);
+            canvas.drawCircle(dotX, dotY, radius * 0.06f, dotInnerPaint);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE:
+                    float cx = getWidth() * 0.5f;
+                    float cy = getHeight() * 0.5f;
+                    float radius = Math.min(cx, cy) * 0.74f;
+
+                    float dx = (event.getX() - cx) / radius;
+                    float dy = -(event.getY() - cy) / radius; // Invert Y
+
+                    float dist = (float) Math.hypot(dx, dy);
+                    float maxR = 0.82f;
+                    if (dist > maxR) {
+                        dx = (dx / dist) * maxR;
+                        dy = (dy / dist) * maxR;
+                    }
+                    offsetX = dx;
+                    offsetY = dy;
+                    invalidate();
+                    if (listener != null) {
+                        listener.onSpinChanged(offsetX, offsetY);
+                    }
+                    return true;
+            }
+            return super.onTouchEvent(event);
+        }
     }
 
     private static final class PoolSurface extends GLSurfaceView {

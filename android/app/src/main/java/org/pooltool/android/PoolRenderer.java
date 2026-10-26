@@ -17,6 +17,7 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     static final int SOUND_SHOT = 1;
     static final int SOUND_BALL = 2;
     static final int SOUND_POCKET = 3;
+    static final int SOUND_CUSHION = 4;
 
     // Table & Physics Dimensions
     private static final float TABLE_HALF_X = 1.30f;
@@ -97,6 +98,10 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     private float cuePullback = 0f;       // Shot power pullback distance (0.0 to 1.0)
     private int selectedCueIndex = 0;     // Currently equipped cue
 
+    // Cue Tip Striking Offset (Spin & English)
+    private float tipOffsetX = 0f; // -1.0 (left English) to +1.0 (right English)
+    private float tipOffsetY = 0f; // -1.0 (draw/backspin) to +1.0 (follow/topspin)
+
     private boolean overheadCamera;
     private long lastFrameNanos;
     private float accumulator;
@@ -109,7 +114,7 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     private volatile GameStateListener gameStateListener;
 
     interface SoundListener {
-        void onSound(int soundType);
+        void onSound(int soundType, float volume);
     }
 
     interface GameStateListener {
@@ -128,6 +133,25 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         if (index >= 0 && index < CUE_COLORS.length) {
             selectedCueIndex = index;
         }
+    }
+
+    synchronized void setTipOffset(float offsetX, float offsetY) {
+        float dist = (float) Math.hypot(offsetX, offsetY);
+        if (dist > 0.82f) {
+            this.tipOffsetX = (offsetX / dist) * 0.82f;
+            this.tipOffsetY = (offsetY / dist) * 0.82f;
+        } else {
+            this.tipOffsetX = offsetX;
+            this.tipOffsetY = offsetY;
+        }
+    }
+
+    synchronized float getTipOffsetX() {
+        return tipOffsetX;
+    }
+
+    synchronized float getTipOffsetY() {
+        return tipOffsetY;
     }
 
     void setAimSensitivity(float sensitivity) {
@@ -212,9 +236,23 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         float speed = 0.40f + (float) Math.pow(power, 1.3) * MAX_SHOT_SPEED;
         cue.vx = aimX * speed;
         cue.vz = aimZ * speed;
+
+        // Apply cue tip striking offset physics (English and Follow/Draw)
+        cue.spinForward = tipOffsetY * speed * 1.55f;
+        cue.spinEnglish = tipOffsetX * speed * 2.0f;
+
+        // Squirt deflection (striking off-center deflects cue ball slightly in opposite direction)
+        float squirt = -tipOffsetX * 0.035f;
+        float cosSq = (float) Math.cos(squirt);
+        float sinSq = (float) Math.sin(squirt);
+        float qx = cue.vx * cosSq - cue.vz * sinSq;
+        float qz = cue.vx * sinSq + cue.vz * cosSq;
+        cue.vx = qx;
+        cue.vz = qz;
+
         shotInProgress = true;
         cuePullback = 0f;
-        emitSound(SOUND_SHOT);
+        emitSound(SOUND_SHOT, Math.min(1.0f, Math.max(0.25f, speed / MAX_SHOT_SPEED)));
     }
 
     synchronized void previewAim(float screenDx, float screenDy, int width, int height) {
@@ -486,19 +524,29 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
             GLES20.glDrawArrays(GLES20.GL_LINES, 0, ringSegments * 2);
         }
 
-        // 3D Cue Stick Model (Uses Custom Selected Cue Style Material)
+        // 3D Cue Stick Model (Uses Custom Selected Cue Style Material & Tip Offset)
         float cueBackOffset = BALL_RADIUS + 0.08f + cuePullback * 0.28f;
         float cueLength = 1.15f;
-        float cueStartX = cue.x - aimX * cueBackOffset;
-        float cueStartZ = cue.z - aimZ * cueBackOffset;
-        float cueEndX = cue.x - aimX * (cueBackOffset + cueLength);
-        float cueEndZ = cue.z - aimZ * (cueBackOffset + cueLength);
+
+        // Visual tip strike offset on cue ball
+        float perpX = -aimZ;
+        float perpZ = aimX;
+        float tipWorldX = cue.x + perpX * (tipOffsetX * BALL_RADIUS * 0.72f);
+        float tipWorldY = BALL_Y + (tipOffsetY * BALL_RADIUS * 0.72f);
+        float tipWorldZ = cue.z + perpZ * (tipOffsetX * BALL_RADIUS * 0.72f);
+
+        float cueStartX = tipWorldX - aimX * cueBackOffset;
+        float cueStartY = tipWorldY + 0.015f;
+        float cueStartZ = tipWorldZ - aimZ * cueBackOffset;
+        float cueEndX = tipWorldX - aimX * (cueBackOffset + cueLength);
+        float cueEndY = tipWorldY + 0.032f;
+        float cueEndZ = tipWorldZ - aimZ * (cueBackOffset + cueLength);
 
         dynamicBuffer.clear();
         offset = 0;
 
-        offset = putVertex(dynamicBuffer, offset, cueStartX, BALL_Y + 0.015f, cueStartZ, 0f, 1f, 0f);
-        putVertex(dynamicBuffer, offset, cueEndX, BALL_Y + 0.030f, cueEndZ, 0f, 1f, 0f);
+        offset = putVertex(dynamicBuffer, offset, cueStartX, cueStartY, cueStartZ, 0f, 1f, 0f);
+        putVertex(dynamicBuffer, offset, cueEndX, cueEndY, cueEndZ, 0f, 1f, 0f);
 
         dynamicBuffer.position(0);
         GLES20.glEnableVertexAttribArray(positionAttribute);
@@ -613,6 +661,51 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         verts.add(x3); verts.add(y3); verts.add(z3); verts.add(nx); verts.add(ny); verts.add(nz);
     }
 
+    private static final class CushionSegment {
+        final float x1, z1, x2, z2;
+        final boolean isJaw;
+
+        CushionSegment(float x1, float z1, float x2, float z2, boolean isJaw) {
+            this.x1 = x1;
+            this.z1 = z1;
+            this.x2 = x2;
+            this.z2 = z2;
+            this.isJaw = isJaw;
+        }
+    }
+
+    private static final CushionSegment[] CUSHION_SEGMENTS = {
+            // 1. Top-Left Rail & Jaws (z = -0.605f)
+            new CushionSegment(-1.16f, -0.605f, -0.11f, -0.605f, false),
+            new CushionSegment(-1.16f, -0.605f, -1.22f, -0.630f, true),  // Corner facing
+            new CushionSegment(-0.11f, -0.605f, -0.07f, -0.638f, true),  // Side facing
+
+            // 2. Top-Right Rail & Jaws (z = -0.605f)
+            new CushionSegment(0.11f, -0.605f, 1.16f, -0.605f, false),
+            new CushionSegment(0.07f, -0.638f, 0.11f, -0.605f, true),   // Side facing
+            new CushionSegment(1.16f, -0.605f, 1.22f, -0.630f, true),   // Corner facing
+
+            // 3. Bottom-Left Rail & Jaws (z = +0.605f)
+            new CushionSegment(-1.16f, 0.605f, -0.11f, 0.605f, false),
+            new CushionSegment(-1.16f, 0.605f, -1.22f, 0.630f, true),   // Corner facing
+            new CushionSegment(-0.11f, 0.605f, -0.07f, 0.638f, true),   // Side facing
+
+            // 4. Bottom-Right Rail & Jaws (z = +0.605f)
+            new CushionSegment(0.11f, 0.605f, 1.16f, 0.605f, false),
+            new CushionSegment(0.07f, 0.638f, 0.11f, 0.605f, true),    // Side facing
+            new CushionSegment(1.16f, 0.605f, 1.22f, 0.630f, true),    // Corner facing
+
+            // 5. Left Rail & Jaws (x = -1.255f)
+            new CushionSegment(-1.255f, -0.51f, -1.255f, 0.51f, false),
+            new CushionSegment(-1.255f, -0.51f, -1.275f, -0.57f, true), // Top-left corner facing
+            new CushionSegment(-1.255f, 0.51f, -1.275f, 0.57f, true),  // Bottom-left corner facing
+
+            // 6. Right Rail & Jaws (x = +1.255f)
+            new CushionSegment(1.255f, -0.51f, 1.255f, 0.51f, false),
+            new CushionSegment(1.255f, -0.51f, 1.275f, -0.57f, true),  // Top-right corner facing
+            new CushionSegment(1.255f, 0.51f, 1.275f, 0.57f, true)   // Bottom-right corner facing
+    };
+
     private void stepPhysics(float dt) {
         synchronized (this) {
             for (Ball ball : balls) {
@@ -621,17 +714,45 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
                 }
                 ball.x += ball.vx * dt;
                 ball.z += ball.vz * dt;
+
                 float speed = (float) Math.hypot(ball.vx, ball.vz);
-                if (speed > 0f) {
+                if (speed > 0.001f) {
+                    float dirX = ball.vx / speed;
+                    float dirZ = ball.vz / speed;
+
+                    // Deceleration from cloth rolling friction
                     float newSpeed = Math.max(0f, speed - 0.40f * dt);
                     float scale = newSpeed / speed;
                     ball.vx *= scale;
                     ball.vz *= scale;
-                    if (newSpeed < 0.012f) {
+
+                    // Spin forward/draw interaction with cloth
+                    if (Math.abs(ball.spinForward) > 0.02f) {
+                        float spinForce = ball.spinForward * 1.35f * dt;
+                        ball.vx += dirX * spinForce;
+                        ball.vz += dirZ * spinForce;
+                        ball.spinForward -= Math.copySign(Math.min(Math.abs(ball.spinForward), 2.2f * dt), ball.spinForward);
+                    }
+
+                    // Side-spin English decay
+                    if (Math.abs(ball.spinEnglish) > 0.02f) {
+                        ball.spinEnglish -= Math.copySign(Math.min(Math.abs(ball.spinEnglish), 1.1f * dt), ball.spinEnglish);
+                    }
+
+                    if (newSpeed < 0.010f && Math.abs(ball.spinForward) < 0.05f) {
                         ball.vx = 0f;
                         ball.vz = 0f;
+                        ball.spinForward = 0f;
+                        ball.spinEnglish = 0f;
                     }
+                } else if (ball.cue && Math.abs(ball.spinForward) > 0.06f) {
+                    // Cue ball momentarily stopped from ball-to-ball impact, but follow/draw spin engages!
+                    float kick = ball.spinForward * 1.15f * dt;
+                    ball.vx += aimX * kick;
+                    ball.vz += aimZ * kick;
+                    ball.spinForward -= Math.copySign(Math.min(Math.abs(ball.spinForward), 2.4f * dt), ball.spinForward);
                 }
+
                 pocketIfReached(ball);
                 if (!ball.pocketed) {
                     collideWithCushions(ball);
@@ -662,35 +783,119 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
     }
 
     private void pocketIfReached(Ball ball) {
-        for (float[] pocket : POCKET_POSITIONS) {
-            if (Math.hypot(ball.x - pocket[0], ball.z - pocket[1]) < POCKET_RADIUS) {
-                ball.pocketed = true;
-                ball.vx = 0f;
-                ball.vz = 0f;
-                if (ball.cue) {
-                    ball.pocketed = false;
-                    ball.x = 0f;
-                    ball.z = 0.42f;
-                } else {
-                    pocketedCount++;
+        for (int p = 0; p < POCKET_POSITIONS.length; p++) {
+            float[] pocket = POCKET_POSITIONS[p];
+            float dx = pocket[0] - ball.x;
+            float dz = pocket[1] - ball.z;
+            float dist = (float) Math.hypot(dx, dz);
+
+            if (dist < POCKET_RADIUS) {
+                boolean isCorner = (p != 1 && p != 4);
+                float speed = (float) Math.hypot(ball.vx, ball.vz);
+                boolean drop = false;
+
+                if (dist < POCKET_RADIUS * 0.65f) {
+                    // Deep over pocket hole: drops automatically
+                    drop = true;
+                } else if (speed > 0.005f) {
+                    // Directed entry: check velocity vector alignment with pocket
+                    float dotDir = (ball.vx * dx + ball.vz * dz) / (speed * dist);
+                    if (isCorner) {
+                        // Corner pocket: requires entry within ~65 deg of pocket mouth
+                        if (dotDir > 0.38f) {
+                            drop = true;
+                        }
+                    } else {
+                        // Side pocket: requires entry within ~55 deg
+                        if (dotDir > 0.48f) {
+                            drop = true;
+                        }
+                    }
+                } else if (dist < POCKET_RADIUS * 0.82f) {
+                    // Slow ball resting on lip rolls down into well
+                    drop = true;
                 }
-                emitSound(SOUND_POCKET);
-                return;
+
+                if (drop) {
+                    ball.pocketed = true;
+                    ball.vx = 0f;
+                    ball.vz = 0f;
+                    ball.spinForward = 0f;
+                    ball.spinEnglish = 0f;
+                    if (ball.cue) {
+                        ball.pocketed = false;
+                        ball.x = 0f;
+                        ball.z = 0.325f; // Reset to head spot
+                    } else {
+                        pocketedCount++;
+                    }
+                    emitSound(SOUND_POCKET, 1.0f);
+                    return;
+                }
             }
         }
     }
 
     private void collideWithCushions(Ball ball) {
-        float limitX = TABLE_HALF_X - BALL_RADIUS * 1.2f;
-        float limitZ = TABLE_HALF_Z - BALL_RADIUS * 1.2f;
+        for (CushionSegment seg : CUSHION_SEGMENTS) {
+            float dx = seg.x2 - seg.x1;
+            float dz = seg.z2 - seg.z1;
+            float segLenSq = dx * dx + dz * dz;
+            if (segLenSq < 0.00001f) continue;
 
-        if (Math.abs(ball.x) > limitX && Math.abs(ball.z) > 0.15f) {
-            ball.x = Math.copySign(limitX, ball.x);
-            ball.vx *= -0.85f;
+            float u = ((ball.x - seg.x1) * dx + (ball.z - seg.z1) * dz) / segLenSq;
+            u = Math.max(0f, Math.min(1f, u));
+
+            float closestX = seg.x1 + u * dx;
+            float closestZ = seg.z1 + u * dz;
+
+            float toBallX = ball.x - closestX;
+            float toBallZ = ball.z - closestZ;
+            float distSq = toBallX * toBallX + toBallZ * toBallZ;
+
+            if (distSq < BALL_RADIUS * BALL_RADIUS && distSq > 0.0000001f) {
+                float dist = (float) Math.sqrt(distSq);
+                float nx = toBallX / dist;
+                float nz = toBallZ / dist;
+
+                // Push ball out of cushion
+                float overlap = BALL_RADIUS - dist;
+                ball.x += nx * overlap;
+                ball.z += nz * overlap;
+
+                // Relative normal velocity
+                float vn = ball.vx * nx + ball.vz * nz;
+                if (vn < 0f) {
+                    float restitution = seg.isJaw ? 0.70f : 0.84f;
+                    float impulse = -(1f + restitution) * vn;
+                    ball.vx += impulse * nx;
+                    ball.vz += impulse * nz;
+
+                    // English (side spin) modifies rebound tangential velocity
+                    if (!seg.isJaw && Math.abs(ball.spinEnglish) > 0.05f) {
+                        float tx = -nz;
+                        float tz = nx;
+                        float spinImpulse = ball.spinEnglish * 0.24f;
+                        ball.vx += tx * spinImpulse;
+                        ball.vz += tz * spinImpulse;
+                        ball.spinEnglish *= 0.60f;
+                    }
+
+                    emitSound(SOUND_CUSHION, Math.min(1.0f, Math.max(0.15f, Math.abs(vn) / 2.2f)));
+                }
+            }
         }
-        if (Math.abs(ball.z) > limitZ && Math.abs(ball.x) > 0.15f) {
-            ball.z = Math.copySign(limitZ, ball.z);
-            ball.vz *= -0.85f;
+
+        // Hard boundary safety clamp to prevent clipping outside table
+        float maxTableX = TABLE_HALF_X - BALL_RADIUS * 0.7f;
+        float maxTableZ = TABLE_HALF_Z - BALL_RADIUS * 0.7f;
+        if (Math.abs(ball.x) > maxTableX) {
+            ball.x = Math.copySign(maxTableX, ball.x);
+            ball.vx = -Math.abs(ball.vx) * Math.signum(ball.x) * 0.6f;
+        }
+        if (Math.abs(ball.z) > maxTableZ) {
+            ball.z = Math.copySign(maxTableZ, ball.z);
+            ball.vz = -Math.abs(ball.vz) * Math.signum(ball.z) * 0.6f;
         }
     }
 
@@ -717,9 +922,9 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
             return;
         }
         long now = System.currentTimeMillis();
-        if (now - lastBallSoundMillis >= 60L) {
+        if (now - lastBallSoundMillis >= 50L) {
             lastBallSoundMillis = now;
-            emitSound(SOUND_BALL);
+            emitSound(SOUND_BALL, Math.min(1.0f, Math.max(0.18f, Math.abs(relativeVelocity) / 2.5f)));
         }
         float impulse = -(1f + 0.96f) * relativeVelocity * 0.5f;
         first.vx -= impulse * nx;
@@ -746,10 +951,10 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         return null;
     }
 
-    private void emitSound(int soundType) {
+    private void emitSound(int soundType, float volume) {
         SoundListener listener = soundListener;
         if (listener != null) {
-            listener.onSound(soundType);
+            listener.onSound(soundType, volume);
         }
     }
 
@@ -930,6 +1135,8 @@ final class PoolRenderer implements GLSurfaceView.Renderer {
         float z;
         float vx;
         float vz;
+        float spinForward; // Follow (+) / Draw (-) forward spin
+        float spinEnglish; // Right (+) / Left (-) English side spin
         boolean pocketed;
 
         Ball(float x, float y, float z, int color, boolean cue) {
