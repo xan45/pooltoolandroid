@@ -2,9 +2,9 @@ plugins {
     id("com.android.application")
 }
 
-val appVersionName: String = System.getenv("VERSION_NAME")?.removePrefix("v") ?: "0.3.0-beta"
-val appVersionCode: Int = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 30
-val gitCommitHash: String = System.getenv("GIT_COMMIT_HASH") ?: "b3b976b"
+val appVersionName: String = System.getenv("VERSION_NAME")?.removePrefix("v") ?: "0.4.0-beta"
+val appVersionCode: Int = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 40
+val gitCommitHash: String = System.getenv("GIT_COMMIT_HASH") ?: "eb84c4f"
 
 android {
     namespace = "org.pooltool.android"

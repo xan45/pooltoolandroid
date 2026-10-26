@@ -81,6 +81,11 @@ jobs:
           ---
 
           ### ✨ What's New & Improvements
+          * **Realistic Audio Engine**: High-fidelity acoustic billiard sound effects (`.ogg`) powered by Android's native `SoundPool` with dynamic velocity volume scaling and pitch variations.
+          * **Advanced Cue Ball Spin & English**: Full cue tip offset controls to execute Follow (top spin), Draw (backspin), and Left/Right English with squirt deflection and rail rebound angle shifts.
+          * **Interactive Spin Selector UI**: Interactive 2D cue ball chalk contact selector with real-time spin readouts and center stun preset.
+          * **Realistic Cushion Jaws & Angle Acceptance**: 12 tapered pocket jaw chamfers with angle-aware pocket acceptance cones; shallow skimming shots bank or rattle rather than being magnetically pocketed.
+          * **Direct Android Studio Detection**: Seamless root-level and android-level Gradle project workspace.
           * **Material 3 UI**: Floating glassmorphism HUD cards, elevated rounded buttons, press-scale animations.
           * **3D Cue Customization**: 5 customizable cue sticks (*Classic Wood, Ebony, Carbon Fiber, Gold, Neon Blue*).
           * **3D Table & Cushions**: Dark green tournament cloth (`#0B5D3B`), 6 tapered cushions (`#094B30`), 3D recessed pockets.
